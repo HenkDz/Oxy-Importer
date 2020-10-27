@@ -150,8 +150,18 @@ class ZLNotice
 		self::add( 'info', $message );
 	}
 }
+add_action('admin_notices', function() {
+    $notices = new ZLNotice();
+    $notices->init();
+});
 
 
+function zl_redirect_js($location)
+{
+    echo "<script>
+    window.location.href='{$location}';
+    </script>";
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -404,13 +414,13 @@ function add_zl_providers_callback() {
         
         if( ! base64_decode( $_REQUEST['zl_provider_string'] ) ) {
             ZLNotice::error( 'Provider String should be base64 encoded string.' );
-            wp_redirect( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
+            zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
 
         if ( ! is_scalar( $_REQUEST['zl_provider_string'] ) && ! method_exists( $_REQUEST['zl_provider_string'], '__toString' ) ) {
             ZLNotice::error( 'Zoro String should be json string. [1]' );
-            wp_redirect( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
+            zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
 
@@ -418,7 +428,7 @@ function add_zl_providers_callback() {
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             ZLNotice::error( 'Zoro String should be json string. [2]' );
-            wp_redirect( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
+            zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
 
@@ -430,7 +440,7 @@ function add_zl_providers_callback() {
             || ! isset( $provider->version )
         ) {
             ZLNotice::error( 'Zoro String doesn\'t contain connection config' );
-            wp_redirect( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
+            zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
 
@@ -448,13 +458,14 @@ function add_zl_providers_callback() {
 
         if (!$insert) {
             ZLNotice::error( 'Failed to add the provider to database' );
-            wp_redirect( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
+            zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
 
 
         ZLNotice::success( 'Success added the provider to database' );
-        wp_redirect( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
+
+        zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
         exit;
 
         // return $wpdb->insert_id;
