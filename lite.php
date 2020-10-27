@@ -56,6 +56,7 @@ function activate_zl() {
     $zl_providers = "CREATE TABLE {$wpdb->prefix}zl_providers (
         id BIGINT NOT NULL AUTO_INCREMENT,
         uid VARCHAR(255) NOT NULL,
+        site_title VARCHAR(255) NOT NULL,
         provider VARCHAR(255) NOT NULL,
         namespace VARCHAR(255) NOT NULL,
         version VARCHAR(255) NOT NULL,
@@ -348,7 +349,7 @@ function zl_providers_page_callback()
                 <th scope="col" id="provider" class="manage-column column-provider">
                     <span>Provider</span>
                 </th>
-                <th scope="col" id="namespace" class="manage-column column-namespace">
+                <!-- <th scope="col" id="namespace" class="manage-column column-namespace">
                     <span>Namespace</span>
                 </th>
                 <th scope="col" id="version" class="manage-column column-version">
@@ -359,7 +360,7 @@ function zl_providers_page_callback()
                 </th>
                 <th scope="col" id="apisecret" class="manage-column column-apisecret">
                     <span>API Secret</span>
-                </th>
+                </th> -->
             </tr>
         </thead>
         <tbody id="the-list">
@@ -368,7 +369,7 @@ function zl_providers_page_callback()
             
                 <td class="name column-name has-row-actions column-primary" data-colname="Name">
                     <strong>
-                        <a class="row-title" title="<?php echo $provider->uid; ?>"> <?php echo $provider->provider; ?>  </a>
+                        <a class="row-title" title="<?php echo $provider->uid; ?>"> <?php echo "$provider->site_title ($provider->provider)"; ?>  </a>
                     </strong>
                     <br>
                     <div class="row-actions">
@@ -390,10 +391,10 @@ function zl_providers_page_callback()
                         </span>
                     </div>
                 </td>
-                <td class="slug column-namespace"><?php echo $provider->namespace; ?></td>
+                <!-- <td class="slug column-namespace"><?php echo $provider->namespace; ?></td>
                 <td class="slug column-version"><?php echo $provider->version; ?></td>
                 <td class="slug column-apikey"><?php echo $provider->api_key; ?></td>
-                <td class="slug column-apisecret"><?php echo $provider->api_secret; ?></td>
+                <td class="slug column-apisecret"><?php echo $provider->api_secret; ?></td> -->
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -435,6 +436,7 @@ function add_zl_providers_callback() {
         if ( ! is_object( $provider )
             || ! isset( $provider->api_key )
             || ! isset( $provider->api_secret )
+            || ! isset( $provider->site_title )
             || ! isset( $provider->provider )
             || ! isset( $provider->namespace )
             || ! isset( $provider->version )
@@ -446,10 +448,29 @@ function add_zl_providers_callback() {
 
         global $wpdb;
 
+        $uid = null;
+
+        do {
+            $tmp_rnd = Str::random(5);
+            $uid = Str::startsWith($tmp_rnd, [
+                '0', 
+                '1', 
+                '2', 
+                '3', 
+                '4', 
+                '5', 
+                '6', 
+                '7', 
+                '8', 
+                '9'
+            ]) ? null : $tmp_rnd;
+        } while ($uid == null);
+
         $insert = $wpdb->insert("{$wpdb->prefix}zl_providers", [
-            'uid' => Str::random(5),
+            'uid' => $uid,
             'api_key' => $provider->api_key,
             'api_secret' => $provider->api_secret,
+            'site_title' => $provider->site_title,
             'provider' => $provider->provider,
             'namespace' => $provider->namespace,
             'version' => $provider->version,
@@ -461,7 +482,6 @@ function add_zl_providers_callback() {
             zl_redirect_js( add_query_arg( 'page', 'add_zl_providers', get_admin_url().'admin.php' ) );
             exit;
         }
-
 
         ZLNotice::success( 'Success added the provider to database' );
 
