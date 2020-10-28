@@ -873,6 +873,8 @@ function zl_licenses_page_callback()
     <h1 class="wp-heading-inline">Zoro Lite</h1>
     <h2 class="wp-heading-inline">Licenses — <?php echo "{$provider['site_title']} ({$provider['provider']})"; ?> </h2>
 
+    <a href="<?php echo add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ); ?>"><i class="fas fa-long-arrow-alt-left"></i> Back To Provider Page</a>
+
     <hr class="wp-header-end">
 
     <div id="col-container" class="wp-clearfix">
