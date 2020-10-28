@@ -538,8 +538,89 @@ function zl_get_page_from_source()
 
 }
 
-function zl_get_component_from_source() {
-    dd($_REQUEST);
+function zl_get_component_from_source() 
+{
+    $source = isset( $_REQUEST['source'] ) ? sanitize_text_field( base64_decode($_REQUEST['source']) ) : false;
+
+    if ( ! Str::startsWith( $source, 'tla_' ) ) {
+        return ct_get_component_from_source();
+    }
+    $source = Str::replaceFirst( 'tla_', '', $source );
+
+    $zl_pair = Str::of( $source )->explode( '_', 3 );
+
+    list($provider_uid, $license_uid, $slug) = $zl_pair;
+
+    $provider = ZLDB::get('zl_providers', '*', [
+        'uid' => $provider_uid,
+    ]);
+
+    if (!$provider) {
+        exit;
+    }
+
+    $license = ZLDB::get('zl_licenses', '*', [
+        'provider_id' => $provider['id'],
+        'uid' => $license_uid,
+    ]);
+
+    if (!$license) {
+        exit;
+    }
+
+    $data = ZLCache::remember("getComponentFromSource_{$provider['uid']}_{$license['uid']}_{$slug}_{$_REQUEST['id']}_{$_REQUEST['page']}", Carbon::now()->addMinutes(5), function() use ($provider, $license, $slug) {
+        $response = ZLHttp::acceptJson()->get("{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}/oxygenbuilder/componentsclasses/{$_REQUEST['id']}/{$_REQUEST['page']}", [
+            'api_key' => $provider['api_key'],
+            'api_secret' => $provider['api_secret'],
+            'domain' => home_url(),
+            'hash' => $license['hash'],
+            'term' => $slug,
+        ]);
+
+        $component = [];
+        $classes = [];
+        $colors = [];
+        $lookupTable = [];
+
+        $rBody = json_decode($response->body(), true);
+        
+        if ( $response->successful() ) {
+            if(isset($rBody['component']))
+                $component = $rBody['component'];
+            if(isset($rBody['classes']))
+                $classes = $rBody['classes'];
+            if(isset($rBody['colors']))
+                $colors = $rBody['colors'];
+            if(isset($rBody['lookuptable']))
+                $lookupTable = $rBody['lookuptable'];
+        }
+
+        $component = ct_base64_encode_decode_tree([$component], true)[0];
+
+        $output = [
+            'component' => $component
+        ];
+
+        if(sizeof($classes) > 0) {
+            $output['classes'] = $classes;
+        }
+
+        if(sizeof($colors) > 0) {
+            $output['colors'] = $colors;
+        }
+
+        if(sizeof($lookupTable) > 0) {
+            $output['lookuptable'] = $lookupTable;
+        }
+
+        return $output;
+
+    });
+
+    if ($data) {
+        return wp_send_json($data);
+    }
+
 }
 
 /*
