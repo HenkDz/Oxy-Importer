@@ -376,7 +376,8 @@ $ct_source_sites = array_merge($zl_site, $ct_source_sites);
 */
 
 
-function zl_get_items_from_source() {
+function zl_get_items_from_source() 
+{
     $name = isset( $_REQUEST['name'] ) ? sanitize_text_field( $_REQUEST['name'] ) : false;
 
     if ( ! Str::startsWith( $name, 'tla_' ) ) {
@@ -432,8 +433,109 @@ function zl_get_items_from_source() {
 }
 
 
-function zl_get_page_from_source() {
-    dd($_REQUEST);
+function zl_get_page_from_source() 
+{
+    $source = isset( $_REQUEST['source'] ) ? sanitize_text_field( base64_decode($_REQUEST['source']) ) : false;
+
+    if ( ! Str::startsWith( $source, 'tla_' ) ) {
+        return ct_get_page_from_source();
+    }
+    $source = Str::replaceFirst( 'tla_', '', $source );
+
+    $zl_pair = Str::of( $source )->explode( '_', 3 );
+
+    list($provider_uid, $license_uid, $slug) = $zl_pair;
+
+    $provider = ZLDB::get('zl_providers', '*', [
+        'uid' => $provider_uid,
+    ]);
+
+    if (!$provider) {
+        exit;
+    }
+
+    $license = ZLDB::get('zl_licenses', '*', [
+        'provider_id' => $provider['id'],
+        'uid' => $license_uid,
+    ]);
+
+    if (!$license) {
+        exit;
+    }
+
+    $data = ZLCache::remember("getPageFromSource_{$provider['uid']}_{$license['uid']}_{$slug}_{$_REQUEST['id']}", Carbon::now()->addMinutes(5), function() use ($provider, $license, $slug) {
+        $response = ZLHttp::acceptJson()->get("{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}/oxygenbuilder/pagesclasses/{$_REQUEST['id']}", [
+            'api_key' => $provider['api_key'],
+            'api_secret' => $provider['api_secret'],
+            'domain' => home_url(),
+            'hash' => $license['hash'],
+            'term' => $slug,
+        ]);
+
+        $components = [];
+        $classes = [];
+        $colors = [];
+        $lookupTable = [];
+
+        $rBody = json_decode($response->body(), true);
+        
+        if ( $response->successful() ) {
+            if(isset($rBody['components'])){
+                $components = $rBody['components'];
+            }
+            if(isset($rBody['classes']))
+                $classes = $rBody['classes'];
+            if(isset($rBody['colors']))
+                $colors = $rBody['colors'];
+            if(isset($rBody['lookuptable']))
+                $lookupTable = $rBody['lookuptable'];
+        }
+
+        foreach ($components as $key => $component) {
+
+            // if it is a reusable do something about it.
+            if($component['name'] === 'ct_reusable') {
+                unset($components[$key]);
+            }
+
+            if(!isset($components[$key])) {
+                continue; // it could have bene deleted while dealing with a reusable in the previous step
+            }
+
+            $component[$key] = ct_base64_encode_decode_tree([$component], true)[0];
+
+            if(isset($component['children'])) {
+                if(is_array($components[$key]['children'])) {
+                    $components[$key]['children'] = ct_recursively_manage_reusables($components[$key]['children'], [], 'asura');
+                }
+            }
+
+        }
+
+        $output = [
+            'components' => $components
+        ];
+
+        if(sizeof($classes) > 0) {
+            $output['classes'] = $classes;
+        }
+
+        if(sizeof($colors) > 0) {
+            $output['colors'] = $colors;
+        }
+
+        if(sizeof($lookupTable) > 0) {
+            $output['lookuptable'] = $lookupTable;
+        }
+
+        return $output;
+
+    });
+
+    if ($data) {
+        return wp_send_json($data);
+    }
+
 }
 
 function zl_get_component_from_source() {
