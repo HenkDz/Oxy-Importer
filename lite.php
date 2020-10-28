@@ -317,18 +317,57 @@ wp_register_style('fontawesome_css', 'https://kit-pro.fontawesome.com/releases/v
 
 global $ct_source_sites;
 
-$zlSite = [
-    'tla_abcde_abcde_abcdefghijklmnopq_melati' => [
-        'label' => 'Melati [de.test]', 
-        'url' => 'https://thelostasura.com', 
-        'accesskey' =>  '', 
-        'system' => true
-    ],
-];
+function zl_source_sites()
+{
+    $sources_sites = [];
+    $providers = ZLDB::select('zl_providers', '*');
+
+    foreach ($providers as $provider) {
+        $licenses = ZLDB::select('zl_licenses', '*', [
+            'provider_id' => $provider['id'],
+        ]);
+    
+        foreach ($licenses as $license) {
+            $tmp_term = ZLCache::remember("terms_{$license['uid']}", Carbon::now()->addHour(), function() use ($provider, $license) {
+                $response = ZLHttp::acceptJson()->get("{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}/licenses/{$license['license']}/terms", [
+                    'api_key' => $provider['api_key'],
+                    'api_secret' => $provider['api_secret'],
+                    'domain' => home_url(),
+                ]);
+                $rBody = json_decode($response->body());
+                
+                if ( !$response->successful() ) {
+                    ZLNotice::error("<code>{$rBody->code}</code>: {$rBody->message} ");
+                } else {
+                    return $rBody;
+                }
+            });
 
 
-$ct_source_sites = array_merge($zlSite, $ct_source_sites);
+            foreach ($tmp_term as $term) {
+                $sources_sites["tla_{$provider['uid']}_{$license['uid']}_{$term->slug}"] = [
+                    'label' => ucfirst($term->name). " [{$provider['provider']}]", 
+                    'url' => $provider['provider'], 
+                    'accesskey' =>  '', 
+                    'system' => true
+                ];
 
+            }
+
+        }
+    }
+
+    return $sources_sites;
+}
+
+$zl_site = zl_source_sites();
+
+
+
+$ct_source_sites = array_merge($zl_site, $ct_source_sites);
+
+
+// dd($ct_source_sites);
 
 /*
 |--------------------------------------------------------------------------
@@ -338,22 +377,68 @@ $ct_source_sites = array_merge($zlSite, $ct_source_sites);
 
 
 function zl_get_items_from_source() {
-    
     $name = isset( $_REQUEST['name'] ) ? sanitize_text_field( $_REQUEST['name'] ) : false;
 
-    if ( Str::startsWith( $name, 'tla_' ) ) {
+    if ( ! Str::startsWith( $name, 'tla_' ) ) {
         return ct_get_items_from_source();
     }
     $name = Str::replaceFirst( 'tla_', '', $name );
 
     $zl_pair = Str::of( $name )->explode( '_', 3 );
 
-    list($provider, $license, $slug) = $zl_pair;
+    list($provider_uid, $license_uid, $slug) = $zl_pair;
 
-    dd($provider, $license, $slug);
+    $provider = ZLDB::get('zl_providers', '*', [
+        'uid' => $provider_uid,
+    ]);
+
+    if (!$provider) {
+        exit;
+    }
+
+    $license = ZLDB::get('zl_licenses', '*', [
+        'provider_id' => $provider['id'],
+        'uid' => $license_uid,
+    ]);
+
+    if (!$license) {
+        exit;
+    }
+
+    $data = ZLCache::remember("getItemsFromSource_{$provider['uid']}_{$license['uid']}_{$slug}", Carbon::now()->addMinutes(5), function() use ($provider, $license, $slug) {
+        $response = ZLHttp::acceptJson()->get("{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}/oxygenbuilder/items", [
+            'api_key' => $provider['api_key'],
+            'api_secret' => $provider['api_secret'],
+            'domain' => home_url(),
+            'hash' => $license['hash'],
+            'term' => $slug,
+        ]);
+        $rBody = json_decode($response->body());
+        if ( $response->successful() ) {
+            foreach ($rBody->components as $key => $component) {
+                $rBody->components[$key]->source = "tla_{$provider['uid']}_{$license['uid']}_{$slug}";
+            }
+            foreach ($rBody->pages as $key => $page) {
+                $rBody->pages[$key]->source = "tla_{$provider['uid']}_{$license['uid']}_{$slug}";
+            }
+            return $rBody;
+        }
+    });
+
+    if ($data) {
+        return wp_send_json($data);
+    }
     
 }
 
+
+function zl_get_page_from_source() {
+    dd($_REQUEST);
+}
+
+function zl_get_component_from_source() {
+    dd($_REQUEST);
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -371,10 +456,10 @@ function zl_new_style_api_call() {
             ct_setup_default_data();
         break;
         case 'get_component_from_source':
-            ct_get_component_from_source();
+            zl_get_component_from_source();
         break;
         case 'get_page_from_source':
-            ct_get_page_from_source();
+            zl_get_page_from_source();
         break;
         case 'get_items_from_source':
             zl_get_items_from_source();
