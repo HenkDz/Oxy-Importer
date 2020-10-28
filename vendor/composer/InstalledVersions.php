@@ -14,16 +14,25 @@ class InstalledVersions
 private static $installed = array (
   'root' => 
   array (
-    'pretty_version' => '1.0.0+no-version-set',
-    'version' => '1.0.0.0',
+    'pretty_version' => 'dev-main',
+    'version' => 'dev-main',
     'aliases' => 
     array (
     ),
-    'reference' => NULL,
+    'reference' => '0be500cb418932057080ced9c478b511892ad643',
     'name' => 'thelostasura/zoro-lite',
   ),
   'versions' => 
   array (
+    'catfan/medoo' => 
+    array (
+      'pretty_version' => 'v1.7.10',
+      'version' => '1.7.10.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => '2d675f73e23f63bbaeb9a8aa33318659a3d3c32f',
+    ),
     'doctrine/inflector' => 
     array (
       'pretty_version' => '2.0.3',
@@ -252,12 +261,12 @@ private static $installed = array (
     ),
     'thelostasura/zoro-lite' => 
     array (
-      'pretty_version' => '1.0.0+no-version-set',
-      'version' => '1.0.0.0',
+      'pretty_version' => 'dev-main',
+      'version' => 'dev-main',
       'aliases' => 
       array (
       ),
-      'reference' => NULL,
+      'reference' => '0be500cb418932057080ced9c478b511892ad643',
     ),
     'voku/portable-ascii' => 
     array (

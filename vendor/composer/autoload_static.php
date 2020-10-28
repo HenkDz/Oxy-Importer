@@ -12,8 +12,8 @@ class ComposerStaticInit51cc8a18e13f617a074237c989deb851
         'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
         '72579e7bd17821bb1321b87411366eae' => __DIR__ . '/..' . '/illuminate/support/helpers.php',
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
-        'a0edc8309cc5e1d60e3047b5df6b7052' => __DIR__ . '/..' . '/guzzlehttp/psr7/src/functions_include.php',
         'c964ee0ededf28c96ebd9db5099ef910' => __DIR__ . '/..' . '/guzzlehttp/promises/src/functions_include.php',
+        'a0edc8309cc5e1d60e3047b5df6b7052' => __DIR__ . '/..' . '/guzzlehttp/psr7/src/functions_include.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
     );
 
@@ -36,6 +36,10 @@ class ComposerStaticInit51cc8a18e13f617a074237c989deb851
             'Psr\\Http\\Message\\' => 17,
             'Psr\\Http\\Client\\' => 16,
             'Psr\\Container\\' => 14,
+        ),
+        'M' => 
+        array (
+            'Medoo\\' => 6,
         ),
         'I' => 
         array (
@@ -101,6 +105,10 @@ class ComposerStaticInit51cc8a18e13f617a074237c989deb851
         'Psr\\Container\\' => 
         array (
             0 => __DIR__ . '/..' . '/psr/container/src',
+        ),
+        'Medoo\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/catfan/medoo/src',
         ),
         'Illuminate\\Support\\' => 
         array (
