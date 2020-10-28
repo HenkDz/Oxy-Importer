@@ -9,7 +9,7 @@
  * Author:              thelostasura
  * Author URI:          https://thelostasura.com/
  * Requires at least:   5.5
- * Tested up to:		5.5.1
+ * Tested up to:        5.5.1
  * Requires PHP:        7.3
  * 
  * @package             Zoro Lite
@@ -96,62 +96,62 @@ register_activation_hook( __FILE__, 'activate_zl' );
 
 class ZLNotice 
 {
-	protected $types = [
+    protected $types = [
         'error',
         'success',
         'warning',
         'info',
-	];
+    ];
 
-	public function __construct() {}
+    public function __construct() {}
 
-	public function init() {
-		foreach ( $this->types as $type ) {
-			$messages = get_transient( 'zl_notice_' . $type );
+    public function init() {
+        foreach ( $this->types as $type ) {
+            $messages = get_transient( 'zl_notice_' . $type );
 
-			if ( $messages && is_array( $messages ) ) {
-				foreach ( $messages as $message ) {
-					echo sprintf(
-						'<div class="notice notice-%s is-dismissible"><p><b>Zoro Lite</b>: %s</p></div>',
-						$type,
-						$message
-					);
-				}
+            if ( $messages && is_array( $messages ) ) {
+                foreach ( $messages as $message ) {
+                    echo sprintf(
+                        '<div class="notice notice-%s is-dismissible"><p><b>Zoro Lite</b>: %s</p></div>',
+                        $type,
+                        $message
+                    );
+                }
 
-				delete_transient( 'zl_notice_' . $type );
-			}
-		}
-	}
+                delete_transient( 'zl_notice_' . $type );
+            }
+        }
+    }
 
-	public static function add( $level, $message, $code = 0, $duration = 60 ) {
-		$messages = get_transient( 'zl_notice_' . $level );
+    public static function add( $level, $message, $code = 0, $duration = 60 ) {
+        $messages = get_transient( 'zl_notice_' . $level );
 
-		if ( $messages && is_array( $messages ) ) {
-			if (!in_array($message, $messages)) {
-				$messages[] = $message;
-			}
-		} else {
-			$messages = [ $message ];
-		}
+        if ( $messages && is_array( $messages ) ) {
+            if (!in_array($message, $messages)) {
+                $messages[] = $message;
+            }
+        } else {
+            $messages = [ $message ];
+        }
 
-		set_transient( 'zl_notice_' . $level, $messages, $duration );
-	}
+        set_transient( 'zl_notice_' . $level, $messages, $duration );
+    }
 
-	public static function error( $message ) {
-		self::add( 'error', $message );
-	}
+    public static function error( $message ) {
+        self::add( 'error', $message );
+    }
 
-	public static function success( $message ) {
-		self::add( 'success', $message );
-	}
+    public static function success( $message ) {
+        self::add( 'success', $message );
+    }
 
-	public static function warning( $message ) {
-		self::add( 'warning', $message );
-	}
+    public static function warning( $message ) {
+        self::add( 'warning', $message );
+    }
 
-	public static function info( $message ) {
-		self::add( 'info', $message );
-	}
+    public static function info( $message ) {
+        self::add( 'info', $message );
+    }
 }
 add_action('admin_notices', function() {
     $notices = new ZLNotice();
@@ -317,28 +317,28 @@ function zl_get_items_from_source() {
 
 function zl_new_style_api_call() {
     $call_type = isset( $_REQUEST['call_type'] ) ? sanitize_text_field( $_REQUEST['call_type'] ) : false;
-	
-	ct_new_style_api_call_security_check( $call_type );
+    
+    ct_new_style_api_call_security_check( $call_type );
 
-	switch( $call_type ) {
-		case 'setup_default_data':
-			ct_setup_default_data();
-		break;
-		case 'get_component_from_source':
-			ct_get_component_from_source();
-		break;
-		case 'get_page_from_source':
-			ct_get_page_from_source();
-		break;
-		case 'get_items_from_source':
-			zl_get_items_from_source();
-		break;
-		case 'get_stuff_from_source':
-			ct_get_stuff_from_source();
-		break;
-	}
+    switch( $call_type ) {
+        case 'setup_default_data':
+            ct_setup_default_data();
+        break;
+        case 'get_component_from_source':
+            ct_get_component_from_source();
+        break;
+        case 'get_page_from_source':
+            ct_get_page_from_source();
+        break;
+        case 'get_items_from_source':
+            zl_get_items_from_source();
+        break;
+        case 'get_stuff_from_source':
+            ct_get_stuff_from_source();
+        break;
+    }
 
-	die();
+    die();
 }
 
 remove_action( 'wp_ajax_ct_new_style_api_call', 'ct_new_style_api_call' );
