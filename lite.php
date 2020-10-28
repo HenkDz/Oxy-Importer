@@ -39,9 +39,11 @@ require_once ZL_PLUGIN_DIR . '/vendor/autoload.php';
 use Illuminate\Cache\CacheManager;
 use Illuminate\Container\Container;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Medoo\Medoo;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -74,10 +76,11 @@ function activate_zl() {
     $zl_licenses = "CREATE TABLE {$wpdb->prefix}zl_licenses (
         id BIGINT NOT NULL AUTO_INCREMENT,
         uid VARCHAR(255) NOT NULL,
-        provider VARCHAR(255) NOT NULL,
+        provider_id BIGINT NOT NULL,
         license VARCHAR(255) NOT NULL,
         hash VARCHAR(255) NOT NULL,
         status TINYINT(1) NOT NULL DEFAULT 1,
+        expire_at TIMESTAMP NULL,
         created_at TIMESTAMP NULL,
         updated_at TIMESTAMP NULL,
         PRIMARY KEY (id)
@@ -258,11 +261,53 @@ class ZLDB
     }
 }
 
+class ZLHttp
+{
+    private static $instances = [];
+
+    private static $client;
+    
+    protected function __construct() 
+    {
+        self::$client = new HttpFactory();
+    }
+    
+    protected function __clone() { }
+
+    public function __wakeup()
+    {
+        throw new \Exception("Cannot unserialize a singleton.");
+    }
+
+    public static function getInstance(): ZLHttp
+    {
+        $cls = static::class;
+        if (!isset(self::$instances[$cls])) {
+            self::$instances[$cls] = new static();
+        }
+
+        return self::$instances[$cls];
+    }
+
+    public static function __callStatic($method, $args)
+    {
+        return self::getInstance()::$client->{$method}(...$args);
+    }
+}
+
 function zl_redirect_js($location)
 {
     echo "<script>window.location.href='{$location}';</script>";
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Scripts & Styles
+|--------------------------------------------------------------------------
+*/
+
+wp_register_style('fontawesome_css', 'https://kit-pro.fontawesome.com/releases/v5.15.1/css/pro.css', [], null);
 
 /*
 |--------------------------------------------------------------------------
@@ -283,6 +328,7 @@ $zlSite = [
 
 
 $ct_source_sites = array_merge($zlSite, $ct_source_sites);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -375,17 +421,368 @@ add_action('admin_menu', 'zl_providers_page');
 
 function zl_licenses_page_callback()
 {
-    ?>
-    
-    <h2>Zoro Lite</h2>
+    wp_enqueue_style('fontawesome_css');
 
-    <h3>License — </h3>
+    if ( ! isset( $_REQUEST['provider'] ) || empty( $_REQUEST['provider'] ) ) {
+        zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
+        exit;
+    }
+
+    $provider = ZLDB::get('zl_providers', '*', [
+        'id' => $_REQUEST['provider'],
+    ]);
+
+    if (!$provider) {
+        zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
+        exit;
+    }
+
+    if ( 
+        $_SERVER['REQUEST_METHOD'] === 'GET' 
+        && isset($_REQUEST['action']) 
+        && $_REQUEST['action'] == 'sync'
+        && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_licenses_sync' ) 
+    ) {
+
+        $lics = ZLDB::select('zl_licenses', '*', [
+            'provider_id' => $provider['id'],
+        ]);
+
+        if ($lics) {
+            foreach ($lics as $lic) {
+
+                $url = "{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}";
+                $response = ZLHttp::acceptJson()->post("{$url}/licenses/{$lic['license']}/activate", [
+                    'api_key' => $provider['api_key'],
+                    'api_secret' => $provider['api_secret'],
+                    'domain' => home_url(),
+                ]);
+                $rBody = json_decode($response->body());
+        
+                if ( !$response->successful() ) {
+                    ZLNotice::error("<code><b>{$lic['license']}</b></code>: <code>{$rBody->code}</code>: {$rBody->message} ");
+                } else {
+                   $update = ZLDB::update('zl_licenses', [
+                        'hash' => $rBody->hash,
+                        'expire_at' => $rBody->expire_at ? Carbon::parse($rBody->expire_at)->toDateTimeString() : null,
+                    ], [
+                        'provider_id' => $provider['id'],
+                        'id' => $lic['id'],
+                    ]);
+                }
+
+            }
+                
+            ZLCache::flush();
+
+            ZLNotice::success('Successfully sync Licenses\' data.');
+            ZLNotice::warning('Sync the Licenses\' data may temporarily degrade performance for your website and increase load on your server');
+            zl_redirect_js( add_query_arg( [
+                'page' => 'zl_licenses',
+                'provider' => $provider['id']
+            ], get_admin_url().'admin.php' ) );
+            exit;
+        }
+
+
+
+    }
+
+
+    if ( 
+        $_SERVER['REQUEST_METHOD'] === 'GET' 
+        && isset($_REQUEST['action']) 
+        && $_REQUEST['action'] == 'revoke'
+        && isset($_REQUEST['license'])
+        && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_revoke_license' ) 
+    ) {
+        $exist = ZLDB::get('zl_licenses', '*', [
+            'provider_id' => $provider['id'],
+            'id' => $_REQUEST['license'],
+        ]);
+
+        if ($exist) {
+            ZLDB::delete('zl_licenses', [
+                'provider_id' => $provider['id'],
+                'id' => $_REQUEST['license'],
+            ]);
+            
+            ZLCache::flush();
+            ZLNotice::success( 'The license key removed from database' );
+        } else {
+            ZLNotice::error( 'The license key not exist in database' );
+        }
+
+        zl_redirect_js( add_query_arg( [
+            'page' => 'zl_licenses',
+            'provider' => $provider['id']
+        ], get_admin_url().'admin.php' ) );
+        exit;
+    }
+
+    if ( 
+        $_SERVER['REQUEST_METHOD'] === 'POST'
+        && isset($_REQUEST['zl_license_key'])
+        && !empty($_REQUEST['zl_license_key'])
+        && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_add_license' ) 
+    ) {
+        
+        $license_key = $_REQUEST['zl_license_key'];
+        
+        $exist = ZLDB::get('zl_licenses', '*', [
+            'provider_id' => $provider['id'],
+            'license' => $license_key,
+        ]);
+
+        if ($exist) {
+            ZLNotice::error( 'The license key already exist in database' );
+            zl_redirect_js( add_query_arg( [
+                'page' => 'zl_licenses',
+                'provider' => $provider['id']
+            ], get_admin_url().'admin.php' ) );
+            exit;
+        }
+
+        $url = "{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}";
+        $response = ZLHttp::acceptJson()->post("{$url}/licenses/{$license_key}/activate", [
+            'api_key' => $provider['api_key'],
+            'api_secret' => $provider['api_secret'],
+            'domain' => home_url(),
+        ]);
+        $rBody = json_decode($response->body());
+
+        if ( !$response->successful() ) {
+
+            ZLNotice::error("<code>{$rBody->code}</code>: {$rBody->message} ");
+            zl_redirect_js( add_query_arg( [
+                'page' => 'zl_licenses',
+                'provider' => $provider['id']
+            ], get_admin_url().'admin.php' ) );
+            exit;
+
+        } else {
+            $insert = ZLDB::insert('zl_licenses', [
+                'uid' => Str::random(5),
+                'provider_id' => $provider['id'],
+                'license' => $rBody->key,
+                'hash' => $rBody->hash,
+                'expire_at' => $rBody->expire_at ? Carbon::parse($rBody->expire_at)->toDateTimeString() : null,
+                'created_at' => Carbon::now()->toDateTimeString(),
+            ]);
+
+            if (!$insert) {
+                ZLNotice::error( 'Failed to add the provider to database' );
+                zl_redirect_js( add_query_arg( [
+                    'page' => 'zl_licenses',
+                    'provider' => $provider['id']
+                ], get_admin_url().'admin.php' ) );
+                exit;
+            }
+
+        }
+
+        ZLCache::flush();
+        ZLNotice::success('License key added successfully.');
+        zl_redirect_js( add_query_arg( [
+            'page' => 'zl_licenses',
+            'provider' => $provider['id']
+        ], get_admin_url().'admin.php' ) );
+        exit;
+
+        // return ZLDB::id();
+    }
+
+    $licenses = ZLCache::remember( 'licenses', Carbon::now()->addMinutes( 10 ), function() use ($provider) {
+        return ZLDB::select( 'zl_licenses', '*', [
+            'provider_id' => $provider['id']
+        ] );
+    } );
+
+    ?>
+
+    
+<div class="wrap nosubsub">
+    <h1 class="wp-heading-inline">Zoro Lite</h1>
+    <h2 class="wp-heading-inline">Licenses — <?php echo "{$provider['site_title']} ({$provider['provider']})"; ?> </h2>
+
+    <hr class="wp-header-end">
+
+    <div id="col-container" class="wp-clearfix">
+
+        <div id="col-left" style="width: 25%;">
+            <div class="col-wrap">
+                <div class="form-wrap">
+                    <h2>Add License</h2>
+                    <form method="post">
+                        <?php wp_nonce_field('zl_add_license');?>
+
+                        <div class="form-field form-required term-name-wrap">
+                            <label for="zl_license_key">License Key</label>
+                            <input name="zl_license_key" id="zl_license_key" type="text" value="" size="40" aria-required="true">
+                            <p>Get it from your email or customer page after you purchase a design set.</p>
+                        </div>
+                        <?php submit_button('Add New License'); ?>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div id="col-right" style="width: 75%;">
+            <div class="col-wrap">
+                <table class="wp-list-table widefat fixed striped table-view-list tags">
+                    <thead>
+                        <tr>
+                            <th scope="col" id="licensekey" class="manage-column column-licensekey">
+                                <span>License Key</span>
+                            </th>
+                            <th scope="col" id="expire" class="manage-column column-expire">
+                                <span>Expire At</span>
+                            </th>
+                            <th scope="col" id="terms" class="manage-column column-terms">
+                                <span>Design Sets</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="the-list">
+                    <?php foreach ($licenses as $key => $license): ?>
+                        <tr class="level-0">
+                        
+                            <td class="name column-name has-row-actions column-primary">
+                                <strong>
+                                    <a class="row-title" title="<?php echo $license['uid']; ?>"> <?php echo $license['license']; ?>  </a>
+                                </strong>
+                                <br>
+                                <div class="row-actions">
+                                    <span class="edit">
+                                        <a href="">Edit</a> | 
+                                    </span>
+                                    <span class="delete">
+                                        <a href="<?php
+                                            echo add_query_arg([
+                                                'page' => 'zl_licenses',
+                                                'provider' => $provider['id'],
+                                                'license' => $license['id'],
+                                                'action' => 'revoke',
+                                                '_wpnonce' => wp_create_nonce( 'zl_revoke_license' )
+                                            ], get_admin_url().'admin.php');
+                                        ?>" class="delete-tag">Revoke</a>
+                                    </span>
+                                    <!-- <span class="view">
+                                        <a href="<?php
+                                            echo add_query_arg([
+                                                'page' => 'zl_licenses',
+                                                'provider' => $provider['id'],
+                                            ], get_admin_url().'admin.php');
+                                        ?>">License Keys</a>
+                                    </span> -->
+                                </div>
+                            </td>
+
+                            <td>
+                                <?php if ($license['expire_at']): ?>
+                                    <a style="<?php echo (Carbon::parse($license['expire_at'])->lessThan(Carbon::today())) ? 'color: red;' : ''; ?>"
+                                    >
+                                        <?php echo Carbon::parse($license['expire_at'])->format('M d, Y'); ?>
+                                    </a>
+                                <?php endif; ?>
+                            </td>
+
+                            <td>
+                                <?php
+                                    $tmp_term = ZLCache::remember("terms_{$license['uid']}", Carbon::now()->addHour(), function() use ($provider, $license) {
+                                        $response = ZLHttp::acceptJson()->get("{$provider['provider']}/wp-json/{$provider['namespace']}/{$provider['version']}/licenses/{$license['license']}/terms", [
+                                            'api_key' => $provider['api_key'],
+                                            'api_secret' => $provider['api_secret'],
+                                            'domain' => home_url(),
+                                        ]);
+                                        $rBody = json_decode($response->body());
+                                        
+                                        if ( !$response->successful() ) {
+                                            ZLNotice::error("<code>{$rBody->code}</code>: {$rBody->message} ");
+                                        } else {
+                                            return $rBody;
+                                        }
+                                    });
+
+                                    // dd($tmp_term);
+
+                                foreach ($tmp_term as $term): ?>
+                                            
+                                    <b> <?php echo ucfirst($term->name); ?> </b>
+                                    — expire: 
+                                    <?php if ($term->pivot->expire_at): ?>
+                                        <a style="<?php echo (Carbon::parse($term->pivot->expire_at)->lessThan(Carbon::today())) ? 'color: red;' : ''; ?>"
+                                        >
+                                            <?php echo Carbon::parse($term->pivot->expire_at)->format('M d, Y'); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        non-expiring
+                                    <?php endif; ?>
+                                    <br/>
+                                <?php endforeach; ?>
+
+
+
+                            </td>
+
+
+
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                    
+                </table>
+                
+                <div>
+                    <div style="float: left;padding-top:10px;">
+                        <span style="padding:4px;">
+                            <a title="Force Zoro Lite to sync data from provider's server." href="<?php
+                                echo add_query_arg([
+                                    'page' => 'zl_licenses',
+                                    'provider' => $provider['id'],
+                                    'action' => 'sync',
+                                    '_wpnonce' => wp_create_nonce( 'zl_licenses_sync' )
+                                ], get_admin_url().'admin.php');
+                            ?>" style="color:#444444;text-decoration: none !important;">
+                                <i class="fas fa-sync fa-lg" style="color: #dc3545"></i>
+                                <b>Sync Licenses' data</b>
+                            </a>
+                        </span>
+                    </div>
+                    <div style="float: right;padding-top:10px;">
+                        <span style="padding:4px;background-color:#fff1a8;transition: opacity 0.4s ease-out 0s; opacity: 1;">
+                            <a target="_blank" href="https://thelostasura.com/go/asura" style="color:#444444;text-decoration: none !important;">
+                                <i class="fas fa-ad fa-lg"></i> Powered by
+                                <b> Zoro Lite</b>
+                            </a>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
     
     <?php
 }
 
 function zl_providers_page_callback()
 {
+    wp_enqueue_style('fontawesome_css');
+
+    if ( 
+        $_SERVER['REQUEST_METHOD'] === 'GET' 
+        && isset($_REQUEST['action']) 
+        && $_REQUEST['action'] == 'purge'
+        && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_purge' ) 
+    ) {
+        ZLCache::flush();
+
+        ZLNotice::success('Successfully purged cache');
+        ZLNotice::warning('Purging the cache may temporarily degrade performance for your website and increase load on your server');
+        zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
+        exit;
+    }
+
     if ( 
         $_SERVER['REQUEST_METHOD'] === 'POST' 
         && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_add_provider' ) 
@@ -466,16 +863,20 @@ function zl_providers_page_callback()
         $_SERVER['REQUEST_METHOD'] === 'GET' 
         && isset($_REQUEST['action']) 
         && $_REQUEST['action'] == 'revoke'
-        && isset($_REQUEST['license'])
+        && isset($_REQUEST['provider'])
         && wp_verify_nonce( $_REQUEST['_wpnonce'], 'zl_revoke_provider' ) 
     ) {
         $exist = ZLDB::get('zl_providers', '*', [
-            'id' => $_REQUEST['license'],
+            'id' => $_REQUEST['provider'],
         ]);
 
         if ($exist) {
+            ZLDB::delete('zl_licenses', [
+                'provider_id' => $_REQUEST['provider'],
+            ]);
+
             ZLDB::delete('zl_providers', [
-                'id' => $_REQUEST['license'],
+                'id' => $_REQUEST['provider'],
             ]);
             
             ZLCache::flush();
@@ -495,7 +896,8 @@ function zl_providers_page_callback()
     ?>
 
 <div class="wrap nosubsub">
-    <h1 class="wp-heading-inline">Providers</h1>
+    <h1 class="wp-heading-inline">Zoro Lite</h1>
+    <h2 class="wp-heading-inline">Providers</h2>
 
     <hr class="wp-header-end">
 
@@ -532,7 +934,7 @@ function zl_providers_page_callback()
                     <?php foreach ($providers as $key => $provider): ?>
                         <tr class="level-0">
                         
-                            <td class="name column-name has-row-actions column-primary" data-colname="Name">
+                            <td class="name column-name has-row-actions column-primary">
                                 <strong>
                                     <a class="row-title" title="<?php echo $provider['uid']; ?>"> <?php echo "{$provider['site_title']} ({$provider['provider']})"; ?>  </a>
                                 </strong>
@@ -545,14 +947,19 @@ function zl_providers_page_callback()
                                         <a href="<?php
                                             echo add_query_arg([
                                                 'page' => 'zl',
-                                                'license' => $provider['id'],
+                                                'provider' => $provider['id'],
                                                 'action' => 'revoke',
                                                 '_wpnonce' => wp_create_nonce( 'zl_revoke_provider' )
                                             ], get_admin_url().'admin.php');
                                         ?>" class="delete-tag">Revoke</a> | 
                                     </span>
                                     <span class="view">
-                                        <a href="http://user.test/tag/bcd/">License Keys</a>
+                                        <a href="<?php
+                                            echo add_query_arg([
+                                                'page' => 'zl_licenses',
+                                                'provider' => $provider['id'],
+                                            ], get_admin_url().'admin.php');
+                                        ?>">License Keys</a>
                                     </span>
                                 </div>
                             </td>
@@ -561,6 +968,30 @@ function zl_providers_page_callback()
                     </tbody>
                     
                 </table>
+                <div>
+                    <div style="float: left;padding-top:10px;">
+                        <span style="padding:4px;">
+                            <a title="Clear cached files to force Zoro to fetch a fresh version of those datas." href="<?php
+                                echo add_query_arg([
+                                    'page' => 'zl',
+                                    'action' => 'purge',
+                                    '_wpnonce' => wp_create_nonce( 'zl_purge' )
+                                ], get_admin_url().'admin.php');
+                            ?>" style="color:#444444;text-decoration: none !important;">
+                                <i class="fas fa-broom fa-lg" style="color: #dc3545"></i>
+                                <b>Purge cache</b>
+                            </a>
+                        </span>
+                    </div>
+                    <div style="float: right;padding-top:10px;">
+                        <span style="padding:4px;background-color:#fff1a8;transition: opacity 0.4s ease-out 0s; opacity: 1;">
+                            <a target="_blank" href="https://thelostasura.com/go/asura" style="color:#444444;text-decoration: none !important;">
+                                <i class="fas fa-ad fa-lg"></i> Powered by
+                                <b> Zoro Lite</b>
+                            </a>
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
