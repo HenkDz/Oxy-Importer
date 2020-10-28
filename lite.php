@@ -1,6 +1,6 @@
 <?php
 /**
- * Zoro
+ * Zoro Lite
  *
  * @wordpress-plugin
  * Plugin Name:         Zoro Lite
