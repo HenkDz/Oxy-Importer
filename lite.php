@@ -315,7 +315,6 @@ wp_register_style('fontawesome_css', 'https://kit-pro.fontawesome.com/releases/v
 |--------------------------------------------------------------------------
 */
 
-global $ct_source_sites;
 
 function zl_source_sites()
 {
@@ -360,14 +359,13 @@ function zl_source_sites()
     return $sources_sites;
 }
 
-$zl_site = zl_source_sites();
+if ( defined( 'CT_VERSION' ) ) {
+    global $ct_source_sites;
+    $zl_site = zl_source_sites();
+    $ct_source_sites = array_merge($zl_site, $ct_source_sites);
 
-
-
-$ct_source_sites = array_merge($zl_site, $ct_source_sites);
-
-
-// dd($ct_source_sites);
+    // dd($ct_source_sites);
+}
 
 /*
 |--------------------------------------------------------------------------
