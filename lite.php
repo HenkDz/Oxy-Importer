@@ -5,7 +5,7 @@
  * @wordpress-plugin
  * Plugin Name:         Zoro Lite
  * Description:         Access to design sets collections managed by the Asura plugin
- * Version:             1.0.0
+ * Version:             1.0.1
  * Author:              thelostasura
  * Author URI:          https://thelostasura.com/
  * Requires at least:   5.5
@@ -345,7 +345,7 @@ function zl_source_sites()
 
             foreach ($tmp_term as $term) {
                 $sources_sites["tla_{$provider['uid']}_{$license['uid']}_{$term->slug}"] = [
-                    'label' => ucfirst($term->name). " [{$provider['provider']}]", 
+                    'label' => ucfirst($term->name). " [{$provider['site_title']}]", 
                     'url' => $provider['provider'], 
                     'accesskey' =>  '', 
                     'system' => true
