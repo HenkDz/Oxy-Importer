@@ -9,7 +9,7 @@
  * Author:              thelostasura
  * Author URI:          https://thelostasura.com/
  * Requires at least:   5.5
- * Tested up to:        5.5.1
+ * Tested up to:        5.5.2
  * Requires PHP:        7.3
  * 
  * @package             Zoro Lite
