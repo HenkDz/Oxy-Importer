@@ -1,18 +1,18 @@
 <?php
 /**
- * Zoro Lite
+ * Asura Connector
  *
  * @wordpress-plugin
- * Plugin Name:         Zoro Lite
+ * Plugin Name:         Asura Connector
  * Description:         Access to design sets collections managed by the Asura plugin
- * Version:             1.0.1
+ * Version:             1.0.2
  * Author:              thelostasura
  * Author URI:          https://thelostasura.com/
  * Requires at least:   5.5
- * Tested up to:        5.5.2
+ * Tested up to:        5.5.3
  * Requires PHP:        7.3
  * 
- * @package             Zoro Lite
+ * @package             Asura Connector
  * @author              thelostasura
  * @link                https://thelostasura.com/
  * @since               1.0.0
@@ -29,7 +29,27 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ZL_VERSION', '1.0.0' );
+/*
+|--------------------------------------------------------------------------
+| White Label
+|--------------------------------------------------------------------------
+*/
+
+define( 'ZL_WHITE_LABEL', [
+    'plugin_name' => 'Asura Connector',
+    'plugin_url' => 'https://wordpress.org/plugins/zoro-lite',
+    'company_name' => 'Asura Web Designer Company',
+    'company_url' => 'https://thelostasura.com/designsets'
+]);
+
+
+/*
+|--------------------------------------------------------------------------
+| Autoload
+|--------------------------------------------------------------------------
+*/
+
+define( 'ZL_VERSION', '1.0.2' );
 define( 'ZL_PLUGIN_FILE', __FILE__ );
 define( 'ZL_PLUGIN_DIR', __DIR__ );
 define( 'ZL_PLUGIN_URL', plugins_url( '', __FILE__ ) . '/' );
@@ -43,7 +63,6 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Medoo\Medoo;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -115,7 +134,7 @@ class ZLNotice
             if ( $messages && is_array( $messages ) ) {
                 foreach ( $messages as $message ) {
                     echo sprintf(
-                        '<div class="notice notice-%s is-dismissible"><p><b>Zoro Lite</b>: %s</p></div>',
+                        '<div class="notice notice-%s is-dismissible"><p><b>'. ZL_WHITE_LABEL['plugin_name'] .'</b>: %s</p></div>',
                         $type,
                         $message
                     );
@@ -667,8 +686,8 @@ function zl_providers_page()
 {
     add_submenu_page(
         'ct_dashboard_page',
-        'Zoro Lite Providers',
-        'Zoro Lite Providers',
+        ZL_WHITE_LABEL['plugin_name'],
+        ZL_WHITE_LABEL['plugin_name'],
         'manage_options',
         'zl',
         'zl_providers_page_callback'
@@ -868,7 +887,7 @@ function zl_licenses_page_callback()
 
     
 <div class="wrap nosubsub">
-    <h1 class="wp-heading-inline">Zoro Lite</h1>
+    <h1 class="wp-heading-inline"><?php echo ZL_WHITE_LABEL['plugin_name']; ?></h1>
     <h2 class="wp-heading-inline">Licenses — <?php echo "{$provider['site_title']} ({$provider['provider']})"; ?> </h2>
 
     <a href="<?php echo add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ); ?>"><i class="fas fa-long-arrow-alt-left"></i> Back To Provider Page</a>
@@ -1003,7 +1022,7 @@ function zl_licenses_page_callback()
                 <div>
                     <div style="float: left;padding-top:10px;">
                         <span style="padding:4px;">
-                            <a title="Force Zoro Lite to sync data from provider's server." href="<?php
+                            <a title="Force <?php echo ZL_WHITE_LABEL['plugin_name']; ?> to sync data from provider's server." href="<?php
                                 echo add_query_arg([
                                     'page' => 'zl_licenses',
                                     'provider' => $provider['id'],
@@ -1018,9 +1037,9 @@ function zl_licenses_page_callback()
                     </div>
                     <div style="float: right;padding-top:10px;">
                         <span style="padding:4px;background-color:#fff1a8;transition: opacity 0.4s ease-out 0s; opacity: 1;">
-                            <a target="_blank" href="https://thelostasura.com/go/asura" style="color:#444444;text-decoration: none !important;">
+                            <a target="_blank" href="<?php echo ZL_WHITE_LABEL['company_url']; ?>" style="color:#444444;text-decoration: none !important;">
                                 <i class="fas fa-ad fa-lg"></i> Powered by
-                                <b> Zoro Lite</b>
+                                <b> <?php echo ZL_WHITE_LABEL['company_name']; ?></b>
                             </a>
                         </span>
                     </div>
@@ -1063,7 +1082,7 @@ function zl_providers_page_callback()
         }
 
         if ( ! is_scalar( $_REQUEST['zl_provider_string'] ) && ! method_exists( $_REQUEST['zl_provider_string'], '__toString' ) ) {
-            ZLNotice::error( 'Zoro String should be json string. [1]' );
+            ZLNotice::error( ZL_WHITE_LABEL['plugin_name'].' String should be json string. [1]' );
             zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
             exit;
         }
@@ -1071,7 +1090,7 @@ function zl_providers_page_callback()
         $provider = json_decode( base64_decode( $_REQUEST['zl_provider_string'] ) );
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
-            ZLNotice::error( 'Zoro String should be json string. [2]' );
+            ZLNotice::error( ZL_WHITE_LABEL['plugin_name'].' String should be json string. [2]' );
             zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
             exit;
         }
@@ -1084,7 +1103,7 @@ function zl_providers_page_callback()
             || ! isset( $provider->namespace )
             || ! isset( $provider->version )
         ) {
-            ZLNotice::error( 'Zoro String doesn\'t contain connection config' );
+            ZLNotice::error( ZL_WHITE_LABEL['plugin_name'].' String doesn\'t contain connection config' );
             zl_redirect_js( add_query_arg( 'page', 'zl', get_admin_url().'admin.php' ) );
             exit;
         }
@@ -1164,7 +1183,7 @@ function zl_providers_page_callback()
     ?>
 
 <div class="wrap nosubsub">
-    <h1 class="wp-heading-inline">Zoro Lite</h1>
+    <h1 class="wp-heading-inline"><?php echo ZL_WHITE_LABEL['plugin_name']; ?></h1>
     <h2 class="wp-heading-inline">Providers</h2>
 
     <hr class="wp-header-end">
@@ -1179,7 +1198,7 @@ function zl_providers_page_callback()
                         <?php wp_nonce_field('zl_add_provider');?>
 
                         <div class="form-field form-required term-name-wrap">
-                            <label for="zl_provider_string">Zoro String</label>
+                            <label for="zl_provider_string"><?php echo ZL_WHITE_LABEL['plugin_name']; ?> String</label>
                             <input name="zl_provider_string" id="zl_provider_string" type="text" value="" size="40" aria-required="true">
                             <p>Ask your design set seller.</p>
                         </div>
@@ -1239,7 +1258,7 @@ function zl_providers_page_callback()
                 <div>
                     <div style="float: left;padding-top:10px;">
                         <span style="padding:4px;">
-                            <a title="Clear cached files to force Zoro to fetch a fresh version of those datas." href="<?php
+                            <a title="Clear cached files to force <?php echo ZL_WHITE_LABEL['plugin_name']; ?> to fetch a fresh version of those datas." href="<?php
                                 echo add_query_arg([
                                     'page' => 'zl',
                                     'action' => 'purge',
@@ -1253,9 +1272,9 @@ function zl_providers_page_callback()
                     </div>
                     <div style="float: right;padding-top:10px;">
                         <span style="padding:4px;background-color:#fff1a8;transition: opacity 0.4s ease-out 0s; opacity: 1;">
-                            <a target="_blank" href="https://thelostasura.com/go/asura" style="color:#444444;text-decoration: none !important;">
+                            <a target="_blank" href="<?php echo ZL_WHITE_LABEL['company_url']; ?>" style="color:#444444;text-decoration: none !important;">
                                 <i class="fas fa-ad fa-lg"></i> Powered by
-                                <b> Zoro Lite</b>
+                                <b> <?php echo ZL_WHITE_LABEL['company_name']; ?></b>
                             </a>
                         </span>
                     </div>
