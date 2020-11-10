@@ -110,11 +110,36 @@ function activate_zl() {
 register_activation_hook( __FILE__, 'activate_zl' );
 
 
+/**
+ * Initialize the plugin tracker
+ *
+ * @return void
+ */
+function appsero_init_tracker_oxy_importer() {
+
+    if ( ! class_exists( 'Appsero\Client' ) ) {
+      require_once __DIR__ . '/appsero/src/Client.php';
+    }
+
+    $client = new Appsero\Client( '93c6d8f4-b943-4497-8049-4d0efb098e32', 'Oxy Importer', __FILE__ );
+
+    // Active insights
+    $client->insights()->init();
+
+    // Active automatic updater
+    $client->updater();
+
+}
+
+appsero_init_tracker_oxy_importer();
+
+
 /*
 |--------------------------------------------------------------------------
 | Helper
 |--------------------------------------------------------------------------
 */
+
 
 class ZLNotice 
 {
